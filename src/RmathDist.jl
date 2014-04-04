@@ -5,7 +5,7 @@ using Distributions
 import Distributions: pdf, logpdf, cdf, logcdf, ccdf, logccdf,
     quantile, cquantile, invlogcdf, invlogccdf, rand
 
-export Rmath, rmath
+export Rmath, rmath, test_rmath
 
 const libRmath = "libRmath-julia"
 
@@ -255,5 +255,33 @@ end
 @rmath_dist TDist t
 @rmath_dist Uniform unif
 @rmath_dist Weibull weibull
+
+
+function test_rmath(fn,d,x,ulps=1024)
+    y = fn(d,x)
+    yr = fn(d,x,rmath)
+
+    if isfinite(y) && isfinite(yr)
+        diff = abs(y-yr)
+        ulpdiff = abs(y-yr)/max(eps(y),eps(yr))
+        if ulpdiff > ulps
+            stra = string(:($fn($d,$x)))
+            error("assertion failed: ",
+                  "relative error <= ",ulps," ulps",
+                  "\n  ",stra,
+                  "\n  julia res. = ",y,
+                  "\n  rmath res. = ",yr,
+                  "\n  difference = ",ulpdiff," ulps.")
+        end
+    elseif !isequal(y,yr)
+        stra = string(:($fn($d,$x)))
+        strb = string(:($fn($d,$x,rmath)))        
+        error("mismatch of non-finite elements: ",
+              "\n  ",stra,
+                  "\n  julia res. = ",y,
+                  "\n  rmath res. = ",yr)
+    end
+end
+
 
 end # module

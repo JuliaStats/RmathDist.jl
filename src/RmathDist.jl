@@ -5,14 +5,15 @@ using Distributions
 import Distributions: pdf, logpdf, cdf, logcdf, ccdf, logccdf,
     quantile, cquantile, invlogcdf, invlogccdf, rand
 
-export Rmath, rmath, test_rmath
+export Rmath, test_rmath
 
 const libRmath = "libRmath-julia"
 
-immutable Rmath
+immutable Rmath{T<:UnivariateDistribution,S<:ValueSupport} <: UnivariateDistribution{S}
+    dist::T
 end
+Rmath{S<:ValueSupport}(d::UnivariateDistribution{S}) = Rmath{typeof(d),S}(d)
 
-const rmath = Rmath()
 
 macro rmath_dist(T, b)
     dd = Expr(:quote, string("d", b))     # C name for pdf
@@ -22,8 +23,6 @@ macro rmath_dist(T, b)
     Ty = eval(T)
     dc = Ty <: DiscreteDistribution
     pn = Ty.names                       # parameter names
-    pt = Ty.types                       # parameter types
-    Ts = Ty.super
     
     if length(pn) == 1
         
@@ -32,61 +31,62 @@ macro rmath_dist(T, b)
             global pdf, logpdf, cdf, logcdf, ccdf, logccdf
             global quantile, cquantile, invlogcdf, invlogccdf, rand
 
-            function pdf(d::($T), x::Real, ::Rmath)
+            function pdf{S}(d::Rmath{$T,S}, x::Real)
                 ccall(($dd, libRmath), Float64,
                       (Float64, Float64, Int32),
-                      x, d.($p), 0)
+                      x, d.dist.($p), 0)
             end
-            function logpdf(d::($T), x::Real, ::Rmath)
+            function logpdf{S}(d::Rmath{$T,S}, x::Real)
                 ccall(($dd, libRmath), Float64,
                       (Float64, Float64, Int32),
-                      x, d.($p), 1)
+                      x, d.dist.($p), 1)
             end
-            function cdf(d::($T), q::Real, ::Rmath)
+            function cdf{S}(d::Rmath{$T,S}, q::Real)
                 ccall(($pp, libRmath), Float64,
                       (Float64, Float64, Int32, Int32),
-                      q, d.($p), 1, 0)
+                      q, d.dist.($p), 1, 0)
             end
-            function logcdf(d::($T), q::Real, ::Rmath)
+            function logcdf{S}(d::Rmath{$T,S}, q::Real)
                 ccall(($pp, libRmath), Float64,
                       (Float64, Float64, Int32, Int32),
-                      q, d.($p), 1, 1)
+                      q, d.dist.($p), 1, 1)
             end
-            function ccdf(d::($T), q::Real, ::Rmath)
+            function ccdf{S}(d::Rmath{$T,S}, q::Real)
                 ccall(($pp, libRmath),
                       Float64, (Float64, Float64, Int32, Int32),
-                      q, d.($p), 0, 0)
+                      q, d.dist.($p), 0, 0)
             end
-            function logccdf(d::($T), q::Real, ::Rmath)
+            function logccdf{S}(d::Rmath{$T,S}, q::Real)
                 ccall(($pp, libRmath), Float64, (Float64, Float64, Int32, Int32),
-                      q, d.($p), 0, 1)
+                      q, d.dist.($p), 0, 1)
             end
-            function quantile(d::($T), p::Real, ::Rmath)
+            function quantile{S}(d::Rmath{$T,S}, p::Real)
                 ccall(($qq, libRmath), Float64, (Float64, Float64, Int32, Int32),
-                      p, d.($p), 1, 0)
+                      p, d.dist.($p), 1, 0)
             end
-            function cquantile(d::($T), p::Real, ::Rmath)
+            function cquantile{S}(d::Rmath{$T,S}, p::Real)
                 ccall(($qq, libRmath), Float64, (Float64, Float64, Int32, Int32),
-                      p, d.($p), 0, 0)
+                      p, d.dist.($p), 0, 0)
             end
-            function invlogcdf(d::($T), lp::Real, ::Rmath)
+            function invlogcdf{S}(d::Rmath{$T,S}, lp::Real)
                 ccall(($qq, libRmath), Float64, (Float64, Float64, Int32, Int32),
-                      lp, d.($p), 1, 1)
+                      lp, d.dist.($p), 1, 1)
             end
-            function invlogccdf(d::($T), lp::Real, ::Rmath)
+            function invlogccdf{S}(d::Rmath{$T,S}, lp::Real)
                 ccall(($qq, libRmath), Float64, (Float64, Float64, Int32, Int32),
-                      lp, d.($p), 0, 1)
+                      lp, d.dist.($p), 0, 1)
             end
             if $dc
-                function rand(d::($T), ::Rmath)
-                    int(ccall(($rr, libRmath), Float64, (Float64,), d.($p)))
+                function rand{S}(d::Rmath{$T,S})
+                    int(ccall(($rr, libRmath), Float64, (Float64,), d.dist.($p)))
                 end
             else
-                function rand(d::($T), ::Rmath)
-                    ccall(($rr, libRmath), Float64, (Float64,), d.($p))
+                function rand{S}(d::Rmath{$T,S})
+                    ccall(($rr, libRmath), Float64, (Float64,), d.dist.($p))
                 end
             end
         end
+
     elseif length(pn) == 2
     
         p1 = Expr(:quote, pn[1])
@@ -99,65 +99,65 @@ macro rmath_dist(T, b)
         quote
             global pdf, logpdf, cdf, logcdf, ccdf, logccdf
             global quantile, cquantile, invlogcdf, invlogccdf, rand
-            function pdf(d::($T), x::Real, ::Rmath)
+            function pdf{S}(d::Rmath{$T,S}, x::Real)
                 ccall(($dd, libRmath),
                       Float64, (Float64, Float64, Float64, Int32),
-                      x, d.($p1), d.($p2), 0)
+                      x, d.dist.($p1), d.dist.($p2), 0)
             end
-            function logpdf(d::($T), x::Real, ::Rmath)
+            function logpdf{S}(d::Rmath{$T,S}, x::Real)
                 ccall(($dd, libRmath),
                       Float64, (Float64, Float64, Float64, Int32),
-                      x, d.($p1), d.($p2), 1)
+                      x, d.dist.($p1), d.dist.($p2), 1)
             end
-            function cdf(d::($T), q::Real, ::Rmath)
+            function cdf{S}(d::Rmath{$T,S}, q::Real)
                 ccall(($pp, libRmath),
                       Float64, (Float64, Float64, Float64, Int32, Int32),
-                      q, d.($p1), d.($p2), 1, 0)
+                      q, d.dist.($p1), d.dist.($p2), 1, 0)
             end
-            function logcdf(d::($T), q::Real, ::Rmath)
+            function logcdf{S}(d::Rmath{$T,S}, q::Real)
                 ccall(($pp, libRmath),
                       Float64, (Float64, Float64, Float64, Int32, Int32),
-                      q, d.($p1), d.($p2), 1, 1)
+                      q, d.dist.($p1), d.dist.($p2), 1, 1)
             end
-            function ccdf(d::($T), q::Real, ::Rmath)
+            function ccdf{S}(d::Rmath{$T,S}, q::Real)
                 ccall(($pp, libRmath),
                       Float64, (Float64, Float64, Float64, Int32, Int32),
-                      q, d.($p1), d.($p2), 0, 0)
+                      q, d.dist.($p1), d.dist.($p2), 0, 0)
             end
-            function logccdf(d::($T), q::Real, ::Rmath)
+            function logccdf{S}(d::Rmath{$T,S}, q::Real)
                 ccall(($pp, libRmath),
                       Float64, (Float64, Float64, Float64, Int32, Int32),
-                      q, d.($p1), d.($p2), 0, 1)
+                      q, d.dist.($p1), d.dist.($p2), 0, 1)
             end
-            function quantile(d::($T), p::Real, ::Rmath)
+            function quantile{S}(d::Rmath{$T,S}, p::Real)
                 ccall(($qq, libRmath),
                       Float64, (Float64, Float64, Float64, Int32, Int32),
-                      p, d.($p1), d.($p2), 1, 0)
+                      p, d.dist.($p1), d.dist.($p2), 1, 0)
             end
-            function cquantile(d::($T), p::Real, ::Rmath)
+            function cquantile{S}(d::Rmath{$T,S}, p::Real)
                 ccall(($qq, libRmath),
                       Float64, (Float64, Float64, Float64, Int32, Int32),
-                      p, d.($p1), d.($p2), 0, 0)
+                      p, d.dist.($p1), d.dist.($p2), 0, 0)
             end
-            function invlogcdf(d::($T), lp::Real, ::Rmath)
+            function invlogcdf{S}(d::Rmath{$T,S}, lp::Real)
                 ccall(($qq, libRmath),
                       Float64, (Float64, Float64, Float64, Int32, Int32),
-                      lp, d.($p1), d.($p2), 1, 1)
+                      lp, d.dist.($p1), d.dist.($p2), 1, 1)
             end
-            function invlogccdf(d::($T), lp::Real, ::Rmath)
+            function invlogccdf{S}(d::Rmath{$T,S}, lp::Real)
                 ccall(($qq, libRmath),
                       Float64, (Float64, Float64, Float64, Int32, Int32),
-                      lp, d.($p1), d.($p2), 0, 1)
+                      lp, d.dist.($p1), d.dist.($p2), 0, 1)
             end
             if $dc
-                function rand(d::($T), ::Rmath)
+                function rand{S}(d::Rmath{$T,S})
                     int(ccall(($rr, libRmath), Float64,
-                              (Float64,Float64), d.($p1), d.($p2)))
+                              (Float64,Float64), d.dist.($p1), d.dist.($p2)))
                 end
             else
-                function rand(d::($T), ::Rmath)
+                function rand{S}(d::Rmath{$T,S})
                     ccall(($rr, libRmath), Float64,
-                          (Float64,Float64), d.($p1), d.($p2))
+                          (Float64,Float64), d.dist.($p1), d.dist.($p2))
                 end
             end
         end
@@ -169,65 +169,65 @@ macro rmath_dist(T, b)
         quote
             global pdf, logpdf, cdf, logcdf, ccdf, logccdf
             global quantile, cquantile, invlogcdf, invlogccdf, rand
-            function pdf(d::($T), x::Real, ::Rmath)
+            function pdf{S}(d::Rmath{$T,S}, x::Real)
                 ccall(($dd, libRmath), Float64,
                       (Float64, Float64, Float64, Float64, Int32),
-                      x, d.($p1), d.($p2), d.($p3), 0)
+                      x, d.dist.($p1), d.dist.($p2), d.dist.($p3), 0)
             end
-            function logpdf(d::($T), x::Real, ::Rmath)
+            function logpdf{S}(d::Rmath{$T,S}, x::Real)
                 ccall(($dd, libRmath), Float64,
                       (Float64, Float64, Float64, Float64, Int32),
-                      x, d.($p1), d.($p2), d.($p3), 1)
+                      x, d.dist.($p1), d.dist.($p2), d.dist.($p3), 1)
             end
-            function cdf(d::($T), q::Real, ::Rmath)
+            function cdf{S}(d::Rmath{$T,S}, q::Real)
                 ccall(($pp, libRmath), Float64,
                       (Float64, Float64, Float64, Float64, Int32, Int32),
-                      q, d.($p1), d.($p2), d.($p3), 1, 0)
+                      q, d.dist.($p1), d.dist.($p2), d.dist.($p3), 1, 0)
             end
-            function logcdf(d::($T), q::Real, ::Rmath)
+            function logcdf{S}(d::Rmath{$T,S}, q::Real)
                 ccall(($pp, libRmath), Float64,
                       (Float64, Float64, Float64, Float64, Int32, Int32),
-                      q, d.($p1), d.($p2), d.($p3), 1, 1)
+                      q, d.dist.($p1), d.dist.($p2), d.dist.($p3), 1, 1)
             end
-            function ccdf(d::($T), q::Real, ::Rmath)
+            function ccdf{S}(d::Rmath{$T,S}, q::Real)
                 ccall(($pp, libRmath), Float64,
                       (Float64, Float64, Float64, Float64, Int32, Int32),
-                      q, d.($p1), d.($p2), d.($p3), 0, 0)
+                      q, d.dist.($p1), d.dist.($p2), d.dist.($p3), 0, 0)
             end
-            function logccdf(d::($T), q::Real, ::Rmath)
+            function logccdf{S}(d::Rmath{$T,S}, q::Real)
                 ccall(($pp, libRmath), Float64,
                       (Float64, Float64, Float64, Float64, Int32, Int32),
-                      q, d.($p1), d.($p2), d.($p3), 0, 1)
+                      q, d.dist.($p1), d.dist.($p2), d.dist.($p3), 0, 1)
             end
-            function quantile(d::($T), p::Real, ::Rmath)
+            function quantile{S}(d::Rmath{$T,S}, p::Real)
                 ccall(($qq, libRmath), Float64,
                       (Float64, Float64, Float64, Float64, Int32, Int32),
-                      p, d.($p1), d.($p2), d.($p3), 1, 0)
+                      p, d.dist.($p1), d.dist.($p2), d.dist.($p3), 1, 0)
             end
-            function cquantile(d::($T), p::Real, ::Rmath)
+            function cquantile{S}(d::Rmath{$T,S}, p::Real)
                 ccall(($qq, libRmath), Float64,
                       (Float64, Float64, Float64, Float64, Int32, Int32),
-                      p, d.($p1), d.($p2), d.($p3), 0, 0)
+                      p, d.dist.($p1), d.dist.($p2), d.dist.($p3), 0, 0)
             end
-            function invlogcdf(d::($T), lp::Real, ::Rmath)
+            function invlogcdf{S}(d::Rmath{$T,S}, lp::Real)
                 ccall(($qq, libRmath), Float64,
                       (Float64, Float64, Float64, Float64, Int32, Int32),
-                      lp, d.($p1), d.($p2), d.($p3), 1, 1)
+                      lp, d.dist.($p1), d.dist.($p2), d.dist.($p3), 1, 1)
             end
-            function invlogccdf(d::($T), lp::Real, ::Rmath)
+            function invlogccdf{S}(d::Rmath{$T,S}, lp::Real)
                 ccall(($qq, libRmath), Float64,
                       (Float64, Float64, Float64, Float64, Int32, Int32),
-                      lp, d.($p1), d.($p2), d.($p3), 0, 1)
+                      lp, d.dist.($p1), d.dist.($p2), d.dist.($p3), 0, 1)
             end
             if $dc
-                function rand(d::($T), ::Rmath)
+                function rand{S}(d::Rmath{$T,S})
                     int(ccall(($rr, libRmath), Float64,
-                              (Float64,Float64,Float64), d.($p1), d.($p2), d.($p3)))
+                              (Float64,Float64,Float64), d.dist.($p1), d.dist.($p2), d.dist.($p3)))
                 end
             else
-                function rand(d::($T), ::Rmath)
+                function rand{S}(d::Rmath{$T,S})
                     ccall(($rr, libRmath), Float64,
-                          (Float64,Float64,Float64), d.($p1), d.($p2), d.($p3))
+                          (Float64,Float64,Float64), d.dist.($p1), d.dist.($p2), d.dist.($p3))
                 end
             end
         end
@@ -259,7 +259,7 @@ end
 
 function test_rmath(fn,d,x,ulps=1024)
     y = fn(d,x)
-    yr = fn(d,x,rmath)
+    yr = fn(Rmath(d),x)
 
     if isfinite(y) && isfinite(yr)
         diff = abs(y-yr)
@@ -275,13 +275,12 @@ function test_rmath(fn,d,x,ulps=1024)
         end
     elseif !isequal(y,yr)
         stra = string(:($fn($d,$x)))
-        strb = string(:($fn($d,$x,rmath)))        
+        strb = string(:($fn(Rmath($d),$x)))        
         error("mismatch of non-finite elements: ",
               "\n  ",stra,
                   "\n  julia res. = ",y,
                   "\n  rmath res. = ",yr)
     end
 end
-
 
 end # module
